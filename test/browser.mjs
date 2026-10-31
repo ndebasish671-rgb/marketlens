@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 
-const base = 'http://127.0.0.1:3000';
+const base = process.env.BASE_URL || 'http://127.0.0.1:3000';
 fs.mkdirSync('screenshots', { recursive: true });
 const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 1 });
@@ -20,7 +20,9 @@ const overview = {
   signals: await page.locator('.signal-card .verdict').allTextContents(),
   marketCards: await page.locator('.market-card').count(),
   chartCanvases: await page.locator('.price-chart canvas').count(),
-  newsItems: await page.locator('.news-preview .news-item').count()
+  newsItems: await page.locator('.news-preview .news-item').count(),
+  timingPanel: await page.locator('.timing-panel').count(),
+  timingBadges: await page.locator('.signal-timing .timing-badge').count()
 };
 
 // Swing view + MACD
@@ -55,6 +57,21 @@ await page.waitForTimeout(300);
 const screenerRows = await page.locator('.stock-table tbody tr').count();
 await page.screenshot({ path: 'screenshots/screener.png', fullPage: true });
 
+// Live buy/sell timing page
+await page.getByRole('button', { name: 'Buy / Sell signals' }).click();
+await page.waitForSelector('.timing-card', { timeout: 60000 });
+await page.waitForTimeout(800);
+const timingCards = await page.locator('.timing-card').count();
+const timingWithLevels = await page.locator('.timing-card .timing-levels').count();
+await page.screenshot({ path: 'screenshots/buy-sell-signals.png', fullPage: true });
+await page.locator('.timing-card').first().getByRole('button', { name: 'Why / conditions' }).click();
+await page.waitForSelector('dialog[open]');
+const timingModalTitle = await page.locator('dialog[open] h2').textContent();
+await page.getByRole('button', { name: 'Close dialog' }).click();
+await page.getByRole('button', { name: 'Swing', exact: true }).click();
+await page.waitForTimeout(400);
+const swingTimingCards = await page.locator('.timing-card').count();
+
 // API connection modal (no secret input should exist)
 await page.getByRole('button', { name: 'API connection' }).click();
 await page.waitForSelector('dialog[open]');
@@ -76,6 +93,6 @@ await page.waitForTimeout(1200);
 await page.screenshot({ path: 'screenshots/mobile-overview.png', fullPage: true });
 const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
 
-console.log(JSON.stringify({ overview, modalTitle, connectionTitle, secretInputs, searchCount, selected, screenerRows, newsCards, mobileOverflow, consoleErrors: errors }, null, 2));
+console.log(JSON.stringify({ overview, modalTitle, timingCards, timingWithLevels, timingModalTitle, swingTimingCards, connectionTitle, secretInputs, searchCount, selected, screenerRows, newsCards, mobileOverflow, consoleErrors: errors }, null, 2));
 await browser.close();
 if (errors.length) process.exitCode = 1;

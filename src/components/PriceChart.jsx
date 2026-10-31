@@ -29,14 +29,16 @@ function baseOptions(height, timezone, currency, showTime) {
 }
 function lineData(series, key) { return series.filter(s => Number.isFinite(s[key])).map(s => ({ time: s.time, value: s[key] })); }
 
-export default function PriceChart({ candles = [], series = [], type = 'candles', show = {}, timezone = 'UTC', currency = 'USD', height = 300, resetKey = '' }) {
+export default function PriceChart({ candles = [], series = [], type = 'candles', show = {}, levels = null, timezone = 'UTC', currency = 'USD', height = 300, resetKey = '' }) {
   const containerRef = useRef(null);
   const chartRef = useRef(null);
   const mainRef = useRef(null);
   const volumeRef = useRef(null);
   const overlaysRef = useRef({});
+  const levelLinesRef = useRef([]);
   const fittedRef = useRef('');
   const showKey = JSON.stringify(show);
+  const levelsKey = levels ? `${levels.buyTrigger}-${levels.sellTrigger}-${levels.status}-${levels.stale}` : '';
 
   useEffect(() => {
     const el = containerRef.current;
@@ -63,7 +65,7 @@ export default function PriceChart({ candles = [], series = [], type = 'candles'
     fittedRef.current = '';
     const ro = new ResizeObserver(entries => { const w = entries[0]?.contentRect.width; if (w) chart.applyOptions({ width: w }); });
     ro.observe(el);
-    return () => { ro.disconnect(); chart.remove(); chartRef.current = null; mainRef.current = null; volumeRef.current = null; overlaysRef.current = {}; };
+    return () => { ro.disconnect(); chart.remove(); chartRef.current = null; mainRef.current = null; volumeRef.current = null; overlaysRef.current = {}; levelLinesRef.current = []; };
   }, [type, showKey, timezone, currency, height]);
 
   useEffect(() => {
@@ -76,7 +78,21 @@ export default function PriceChart({ candles = [], series = [], type = 'candles'
     if (fittedRef.current !== resetKey && candles.length) { chart.timeScale().fitContent(); fittedRef.current = resetKey; }
   }, [candles, series, type, showKey, resetKey]);
 
-  return <div ref={containerRef} className="price-chart" style={{ height }} role="img" aria-label="Interactive price chart with volume. Drag to pan, scroll to zoom." />;
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main) return;
+    for (const line of levelLinesRef.current) { try { main.removePriceLine(line); } catch {} }
+    levelLinesRef.current = [];
+    if (!levels || levels.status === 'unavailable') return;
+    const add = (price, color, title) => {
+      if (!Number.isFinite(price)) return;
+      levelLinesRef.current.push(main.createPriceLine({ price, color, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title }));
+    };
+    add(levels.buyTrigger, COLORS.up, 'Buy trigger');
+    add(levels.sellTrigger, COLORS.down, 'Sell/exit trigger');
+  }, [levelsKey, type, showKey]);
+
+  return <div ref={containerRef} className="price-chart" style={{ height }} role="img" aria-label="Interactive price chart with volume and optional buy/sell trigger levels. Drag to pan, scroll to zoom." />;
 }
 
 export function OscillatorChart({ series = [], kind = 'rsi', timezone = 'UTC', height = 108, resetKey = '' }) {

@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { STOCKS, INDICES, DEFAULT_WATCHLIST, MARKET_SYMBOLS, catalogEntry, formatPrice, formatChange, formatNumber, formatCompact } from '../shared/catalog.js';
 import { analyze } from '../shared/indicators.js';
+import { buildTradePlan } from '../shared/trade-plan.js';
+import { TimingCard, TimingPanel, TimingDetailModal } from './components/TimingSignals.jsx';
 import PriceChart, { OscillatorChart, INDICATOR_COLORS } from './components/PriceChart.jsx';
 import Sparkline from './components/Sparkline.jsx';
 import StockLogo from './components/StockLogo.jsx';
@@ -20,6 +22,7 @@ import { apiConfig, apiRequest, getJSON } from './lib/api.js';
 
 const PAGES = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'signals', label: 'Buy / Sell signals', icon: Activity },
   { id: 'screener', label: 'Market screener', icon: BarChart3 },
   { id: 'watchlist', label: 'My watchlist', icon: Star },
   { id: 'news', label: 'Market news', icon: Newspaper }
@@ -71,7 +74,7 @@ export default function App() {
   const [mode, setMode] = useState('intraday');
   const [range, setRange] = useState('1D');
   const [chartType, setChartType] = useState('candles');
-  const [show, setShow] = useState({ sma20: true, sma50: true, ema20: false, bb: false, vwap: false });
+  const [show, setShow] = useState({ sma20: true, sma50: true, ema20: false, bb: false, vwap: false, levels: true });
   const [osc, setOsc] = useState('rsi');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -90,6 +93,13 @@ export default function App() {
   const [mobileNav, setMobileNav] = useState(false);
   const [providerStatus, setProviderStatus] = useState(null);
   const [providerTesting, setProviderTesting] = useState(false);
+  const [monitoredSymbols, setMonitoredSymbols] = useState(() => { const v = load('ml-monitored', []); return Array.isArray(v) ? v.filter(x => typeof x === 'string').slice(0, 8) : []; });
+  const [monitorState, setMonitorState] = useState({ items: [], loading: false, error: null });
+  const [signalMode, setSignalMode] = useState('intraday');
+  const [signalMarket, setSignalMarket] = useState('ALL');
+  const [signalStatus, setSignalStatus] = useState('All');
+  const [signalQuery, setSignalQuery] = useState('');
+  const [timingDetail, setTimingDetail] = useState(null);
 
   const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
   const notify = useCallback((message, type = 'ok') => setToast({ message, type, id: Date.now() }), []);
@@ -114,6 +124,7 @@ export default function App() {
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 3200); return () => clearTimeout(t); }, [toast]);
   useEffect(() => save('ml-watchlist', watchlist), [watchlist]);
   useEffect(() => save('ml-symbol', symbol), [symbol]);
+  useEffect(() => save('ml-monitored', monitoredSymbols), [monitoredSymbols]);
 
   useEffect(() => {
     if (!autoRefresh || !apiConfig.configured) return;
@@ -143,7 +154,7 @@ export default function App() {
     if (!apiConfig.configured) return;
     const ctrl = new AbortController();
     setMarketState(s => ({ ...s, loading: apiConfig.configured, error: null }));
-    getJSON('/api/market', ctrl.signal)
+    getJSON('/api/market?timing=1', ctrl.signal)
       .then(data => setMarketState({ items: data.items || [], errors: data.errors || [], loading: false, error: null }))
       .catch(e => { if (e.name !== 'AbortError') setMarketState(s => ({ ...s, loading: false, error: e.message })); });
     return () => ctrl.abort();
@@ -155,11 +166,23 @@ export default function App() {
     const ctrl = new AbortController();
     if (!watchlist.length) { setWatchState({ items: [], loading: false, error: null }); return; }
     setWatchState(s => ({ ...s, loading: apiConfig.configured, error: null }));
-    getJSON(`/api/market?symbols=${encodeURIComponent(watchKey)}`, ctrl.signal)
+    getJSON(`/api/market?symbols=${encodeURIComponent(watchKey)}&timing=1`, ctrl.signal)
       .then(data => setWatchState({ items: data.items || [], loading: false, error: data.errors?.length ? 'Some symbols could not be loaded.' : null }))
       .catch(e => { if (e.name !== 'AbortError') setWatchState(s => ({ ...s, loading: false, error: e.message })); });
     return () => ctrl.abort();
   }, [watchKey, refreshKey]);
+
+  const monitorKey = monitoredSymbols.join(',');
+  useEffect(() => {
+    if (!apiConfig.configured) return;
+    const ctrl = new AbortController();
+    if (!monitoredSymbols.length) { setMonitorState({ items: [], loading: false, error: null }); return; }
+    setMonitorState(s => ({ ...s, loading: true, error: null }));
+    getJSON(`/api/market?symbols=${encodeURIComponent(monitorKey)}&timing=1`, ctrl.signal)
+      .then(data => setMonitorState({ items: data.items || [], loading: false, error: data.errors?.length ? 'Some monitored symbols could not be loaded.' : null }))
+      .catch(e => { if (e.name !== 'AbortError') setMonitorState(s => ({ ...s, loading: false, error: e.message })); });
+    return () => ctrl.abort();
+  }, [monitorKey, refreshKey]);
 
   useEffect(() => {
     if (!apiConfig.configured) return;
@@ -181,6 +204,11 @@ export default function App() {
   const intradaySignal = useMemo(() => a?.intraday?.candles ? analyze(a.intraday.candles, { mode: 'intraday', timeZone: tz }) : null, [a, tz]);
   const swingSignal = useMemo(() => a?.daily?.candles ? analyze(a.daily.candles, { mode: 'swing', timeZone: tz }) : null, [a, tz]);
   const activeSignal = mode === 'intraday' ? intradaySignal : swingSignal;
+  const activePlan = useMemo(() => {
+    const src = mode === 'intraday' ? a?.intraday : a?.daily;
+    if (!src?.candles?.length) return null;
+    return buildTradePlan(src.candles, { mode, timeZone: tz, quote, stale: src.stale, fetchedAt: src.fetchedAt });
+  }, [a, mode, tz, quote]);
   const chartData = useMemo(() => {
     if (!a) return { candles: [], series: [] };
     const src = mode === 'intraday' ? a.intraday : a.daily;
@@ -207,7 +235,11 @@ export default function App() {
   const chartShow = { ...show, vwap: mode === 'intraday' && show.vwap };
   const resetKey = `${symbol}-${mode}-${range}-${chartType}`;
 
-  const selectSymbol = useCallback(sym => { setSymbol(sym); setPage('overview'); setSearchOpen(false); setMobileNav(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }, []);
+  const selectSymbol = useCallback(sym => {
+    setSymbol(sym); setPage('overview'); setSearchOpen(false); setMobileNav(false); window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (!catalogEntry(sym) && !sym.startsWith('^')) setMonitoredSymbols(prev => prev.includes(sym) ? prev : [...prev, sym].slice(-8));
+  }, []);
+  const removeMonitored = useCallback(sym => setMonitoredSymbols(prev => prev.filter(x => x !== sym)), []);
   const toggleWatch = useCallback(sym => {
     setWatchlist(w => {
       if (w.includes(sym)) { notify(`${sym} removed from watchlist`); return w.filter(x => x !== sym); }
@@ -226,8 +258,25 @@ export default function App() {
     return true;
   }), [featured, marketFilter, signalFilter, screenerQuery]);
 
-  const pageTitle = { overview: 'Market overview', screener: 'Market screener', watchlist: 'My watchlist', news: 'Market news' }[page];
-  const pageSub = { overview: 'Less noise. More perspective on the stocks you follow.', screener: 'A starting point for your next deep dive — Indian and US equities.', watchlist: 'Your personal shortlist, with prices and swing context in one place.', news: 'Headlines that move markets, sourced from Google News.' }[page];
+  const signalItems = useMemo(() => {
+    const map = new Map();
+    [...featured, ...monitorState.items, ...watchItems].forEach(i => { if (i && !i.symbol.startsWith('^')) map.set(i.symbol, i); });
+    return [...map.values()];
+  }, [featured, monitorState.items, watchItems]);
+  const filteredSignalItems = useMemo(() => signalItems.filter(i => {
+    if (signalMarket !== 'ALL' && i.market !== signalMarket) return false;
+    const plan = i.timing?.[signalMode];
+    if (signalStatus === 'Buy' && plan?.status !== 'buy') return false;
+    if (signalStatus === 'Sell' && plan?.status !== 'sell') return false;
+    if (signalStatus === 'Wait' && plan?.status !== 'wait') return false;
+    const q = signalQuery.trim().toLowerCase();
+    if (q && !i.name.toLowerCase().includes(q) && !i.symbol.toLowerCase().includes(q)) return false;
+    return true;
+  }), [signalItems, signalMarket, signalMode, signalStatus, signalQuery]);
+  const signalCounts = useMemo(() => signalItems.reduce((acc, i) => { const s = i.timing?.[signalMode]?.status || 'unavailable'; acc[s] = (acc[s] || 0) + 1; return acc; }, { buy: 0, sell: 0, wait: 0, unavailable: 0 }), [signalItems, signalMode]);
+
+  const pageTitle = { overview: 'Market overview', signals: 'Buy / Sell signals', screener: 'Market screener', watchlist: 'My watchlist', news: 'Market news' }[page];
+  const pageSub = { overview: 'Less noise. More perspective on the stocks you follow.', signals: 'Conditional buy and sell/exit timing for every monitored stock, from completed bars.', screener: 'A starting point for your next deep dive — Indian and US equities.', watchlist: 'Your personal shortlist, with prices and swing context in one place.', news: 'Headlines that move markets, sourced from Google News.' }[page];
   const indiaQuote = marketState.items.find(i => i.symbol === '^NSEI');
   const usQuote = marketState.items.find(i => i.symbol === '^GSPC');
   const indiaOpen = sessionOpen(indiaQuote);
@@ -329,9 +378,10 @@ export default function App() {
                   {!apiConfig.configured ? <div className="chart-empty"><Database size={26} /><strong>Your charts will appear here</strong><span>Connect the backend API to load real market data. No sample prices are shown.</span><button className="btn btn-ghost" onClick={() => setModal({ type: 'connection' })}>API setup</button></div>
                     : analysisState.error && !a ? <div className="chart-empty"><AlertCircle size={26} /><strong>Chart data unavailable</strong><span>{analysisState.error}</span><button className="btn btn-ghost" onClick={refresh}><RefreshCw size={14} />Retry</button></div>
                     : !a || !chartData.candles.length ? <div className="chart-empty">{analysisState.loading ? <><Loader2 size={24} className="spin" /><span>Loading candles from Yahoo Finance…</span></> : <><BarChart3 size={26} /><span>No {mode} candles available for this symbol.</span></>}</div>
-                    : <PriceChart candles={chartData.candles} series={chartData.series} type={chartType} show={chartShow} timezone={tz} currency={currency} height={292} resetKey={resetKey} />}
+                    : <PriceChart candles={chartData.candles} series={chartData.series} type={chartType} show={chartShow} levels={show.levels ? activePlan : null} timezone={tz} currency={currency} height={292} resetKey={resetKey} />}
                 </div>
 
+                <div className="indicator-bar"><button className={`indicator-chip ${show.levels ? 'on' : ''}`} onClick={() => setShow(s => ({ ...s, levels: !s.levels }))} aria-pressed={show.levels}><Activity size={12} />Buy/Sell levels</button></div>
                 <div className="oscillator-head">
                   <div className="mini-tabs"><button className={osc === 'rsi' ? 'active' : ''} onClick={() => setOsc('rsi')}>RSI (14)</button><button className={osc === 'macd' ? 'active' : ''} onClick={() => setOsc('macd')}>MACD (12,26,9)</button></div>
                   <span className="osc-value">{osc === 'rsi' ? `RSI ${formatNumber(ind.rsi, 1)}` : `MACD ${formatNumber(ind.macd, 3)} · Signal ${formatNumber(ind.macdSignal, 3)}`}</span>
@@ -354,11 +404,13 @@ export default function App() {
 
               <aside className="card signal-desk">
                 <div className="signal-desk-head"><div><h2>Signal desk</h2><span>Rule-based · not a forecast</span></div><button className="icon-btn tiny" onClick={() => setModal({ type: 'method' })} aria-label="How signals work"><Info size={16} /></button></div>
-                <SignalCard unavailable={!apiConfig.configured} analysis={intradaySignal} active={mode === 'intraday'} onSelect={() => switchMode('intraday')} onDetails={() => setModal({ type: 'signal', mode: 'intraday' })} />
-                <SignalCard unavailable={!apiConfig.configured} analysis={swingSignal} active={mode === 'swing'} onSelect={() => switchMode('swing')} onDetails={() => setModal({ type: 'signal', mode: 'swing' })} />
+                <SignalCard unavailable={!apiConfig.configured} plan={mode === 'intraday' ? activePlan : null} analysis={intradaySignal} active={mode === 'intraday'} onSelect={() => switchMode('intraday')} onDetails={() => setModal({ type: 'signal', mode: 'intraday' })} />
+                <SignalCard unavailable={!apiConfig.configured} plan={mode === 'swing' ? activePlan : null} analysis={swingSignal} active={mode === 'swing'} onSelect={() => switchMode('swing')} onDetails={() => setModal({ type: 'signal', mode: 'swing' })} />
                 <SignalDisclaimer onLearn={() => setModal({ type: 'method' })} />
               </aside>
             </section>
+
+            <TimingPanel plan={activePlan} mode={mode} currency={currency} onDetails={() => setTimingDetail({ item: { symbol, name: stockName, currency }, mode })} onSelectAll={() => navigate('signals')} />
 
             <section className="bottom-grid">
               <div className="card">
@@ -389,6 +441,29 @@ export default function App() {
             <StockTable items={watchItems} watchlist={watchlist} onToggleWatch={toggleWatch} onSelect={selectSymbol} loading={watchState.loading} unavailable={!apiConfig.configured} error={watchState.error} onRetry={refresh} sortable emptyTitle="Your watchlist is empty" emptyText="Search for a stock and tap the star to save it here." />
           </section>}
 
+
+          {page === 'signals' && <section className="signals-page">
+            <div className="card timing-monitor-head">
+              <div><h2>Live buy / sell monitor</h2><p>Auto-checks about every 60s while this tab is visible. Signals use completed bars and latest available data, which may be delayed. Every stock you open is analyzed; the monitor keeps the 16 featured stocks plus your 8 most recently opened custom symbols.</p></div>
+              <button className="btn btn-primary small" onClick={() => setSearchOpen(true)}><Plus size={14} />Add stock</button>
+            </div>
+            <div className="timing-summary">
+              <span className="timing-summary-buy"><ArrowUpRight size={14} />{signalCounts.buy} buy conditions</span>
+              <span className="timing-summary-sell"><TrendingUp size={14} className="flip" />{signalCounts.sell} sell/exit conditions</span>
+              <span>{signalCounts.wait} waiting</span>
+              <span>{signalCounts.unavailable} unavailable</span>
+            </div>
+            <div className="filter-bar card">
+              <div className="segmented">{[['ALL', 'All markets'], ['IN', 'India'], ['US', 'US']].map(([id, label]) => <button key={id} className={signalMarket === id ? 'active' : ''} onClick={() => setSignalMarket(id)}>{label}</button>)}</div>
+              <div className="segmented">{[['intraday', 'Intraday'], ['swing', 'Swing']].map(([id, label]) => <button key={id} className={signalMode === id ? 'active' : ''} onClick={() => setSignalMode(id)}>{label}</button>)}</div>
+              <label className="select-wrap"><SlidersHorizontal size={14} /><select value={signalStatus} onChange={e => setSignalStatus(e.target.value)} aria-label="Filter timing status"><option>All</option><option>Buy</option><option>Sell</option><option>Wait</option></select></label>
+              <div className="search-box filter-search"><Search size={15} /><input value={signalQuery} onChange={e => setSignalQuery(e.target.value)} placeholder="Filter monitored stocks" aria-label="Filter monitored stocks" /></div>
+            </div>
+            {(monitorState.error || marketState.error) && <div className="banner banner-warn"><AlertCircle size={16} />{monitorState.error || marketState.error}</div>}
+            {!apiConfig.configured ? <div className="card table-empty"><Database size={22} /><strong>API not connected</strong><span>Connect the backend to load live timing.</span></div> : (marketState.loading || monitorState.loading) && !signalItems.length ? <div className="card table-empty"><Loader2 size={22} className="spin" /><strong>Loading buy/sell timing…</strong></div> : filteredSignalItems.length ? <div className="timing-grid">{filteredSignalItems.map(item => <TimingCard key={item.symbol} item={item} mode={signalMode} onSelect={selectSymbol} onDetails={(it, m) => setTimingDetail({ item: it, mode: m })} onRemove={!catalogEntry(item.symbol) ? removeMonitored : undefined} />)}</div> : <div className="card table-empty"><Activity size={22} /><strong>No stocks match these filters</strong><span>Try another market, status, or search term.</span></div>}
+            <div className="table-footnote">Buy/Sell labels are educational condition matches, not recommendations. “Sell” means bearish/exit watch, not a short-sale instruction. Triggers require a completed bar close plus confirmation; they are not guaranteed future prices.</div>
+          </section>}
+
           {page === 'news' && <section className="card news-page-card">
             <div className="card-head"><div><h2>Market headlines</h2><p>Original reporting from publishers, linked via Google News.</p></div><button className="btn btn-ghost small" onClick={refresh}><RefreshCw size={14} />Refresh</button></div>
             <div className="filter-bar"><div className="segmented">{[['global', 'Global'], ['india', 'India'], ['us', 'US'], ['stock', symbol]].map(([id, label]) => <button key={id} className={newsTopic === id ? 'active' : ''} onClick={() => setNewsTopic(id)}>{label}</button>)}</div></div>
@@ -407,6 +482,7 @@ export default function App() {
       {modal?.type === 'method' && <MethodologyModal onClose={() => setModal(null)} />}
       {modal?.type === 'sources' && <SourcesModal onClose={() => setModal(null)} />}
       {modal?.type === 'connection' && <ProviderConnection status={providerStatus} testing={providerTesting} onTest={testProvider} onClose={() => setModal(null)} />}
+      {timingDetail && <TimingDetailModal item={timingDetail.item} mode={timingDetail.mode} plan={timingDetail.item.timing?.[timingDetail.mode] || (timingDetail.item.symbol === symbol ? buildTradePlan((timingDetail.mode === 'intraday' ? a?.intraday : a?.daily)?.candles || [], { mode: timingDetail.mode, timeZone: tz, quote }) : null)} currency={timingDetail.item.currency || currency} onClose={() => setTimingDetail(null)} onMethodology={() => { setTimingDetail(null); setModal({ type: 'method' }); }} />}
       {modal?.type === 'signal' && <SignalDetailModal analysis={modal.mode === 'intraday' ? intradaySignal : swingSignal} symbol={symbol} currency={currency} onClose={() => setModal(null)} onMethodology={() => setModal({ type: 'method' })} />}
       {toast && <div className={`toast toast-${toast.type}`} role="status">{toast.type === 'warn' ? <AlertCircle size={16} /> : <ShieldCheck size={16} />}{toast.message}</div>}
     </div>

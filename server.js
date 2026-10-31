@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { STOCKS, INDICES, MARKET_SYMBOLS, catalogEntry, marketFor, displayName } from './shared/catalog.js';
 import { swingSummary } from './shared/indicators.js';
+import { buildTimingSet } from './shared/trade-plan.js';
 import { parseCorsOrigins, corsDecision } from './shared/http-config.js';
 import { readProviderConfig, publicProviderStatus, createFinnhubQuoteClient, eligibleForFinnhub, withHistorySource, mergeProviderQuote, providerFallback } from './shared/finnhub.js';
 
@@ -276,7 +277,7 @@ async function fetchNews({ symbol, topic }) {
 }
 
 // ---- API routes ------------------------------------------------------------
-app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'marketlens-api', version: 1, time: new Date().toISOString(), sources: ['Yahoo Finance chart endpoint', 'Google News RSS'], provider: providerStatus() }));
+app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'marketlens-api', version: 2, features: { completedBarTiming: true, intradayMarketTiming: true }, time: new Date().toISOString(), sources: ['Yahoo Finance chart endpoint', 'Google News RSS'], provider: providerStatus() }));
 
 app.get('/api/provider/status', (_req, res) => res.json(providerStatus()));
 app.post('/api/provider/test', async (_req, res) => {
@@ -313,16 +314,42 @@ app.get('/api/market', async (req, res, next) => {
     const requested = req.query.symbols ? String(req.query.symbols).split(',').map(s => s.trim().toUpperCase()).filter(Boolean) : MARKET_SYMBOLS;
     if (requested.length > 24) return res.status(400).json({ error: 'At most 24 symbols per request.' });
     if (requested.some(s => !validSymbol(s))) return res.status(400).json({ error: 'Invalid symbol in list.' });
-    const results = await Promise.allSettled(requested.map(s => fetchChart(s, '3mo', '1d')));
+    const includeTiming = ['1', 'true', 'both'].includes(String(req.query.timing || '').toLowerCase());
+    const results = await Promise.allSettled(requested.map(async symbol => {
+      const isIndex = symbol.startsWith('^');
+      const [daily, intraday] = await Promise.allSettled([
+        fetchChart(symbol, '3mo', '1d'),
+        includeTiming && !isIndex ? fetchChart(symbol, '5d', '5m') : Promise.resolve(null)
+      ]);
+      return { symbol, isIndex, daily, intraday };
+    }));
     const items = [];
     const errors = [];
     results.forEach((r, idx) => {
-      if (r.status === 'fulfilled') {
-        const v = r.value;
-        items.push({ ...v.quote, candles: v.candles, stale: v.stale, fetchedAt: v.fetchedAt, historySource: v.historySource, quoteSource: v.quoteSource, providerWarning: v.providerWarning || null, swing: swingSummary(v.candles, v.quote.timezone) });
-      } else errors.push({ symbol: requested[idx], error: r.reason.message });
+      if (r.status !== 'fulfilled') { errors.push({ symbol: requested[idx], error: r.reason.message }); return; }
+      const { symbol, isIndex, daily, intraday } = r.value;
+      if (daily.status !== 'fulfilled') { errors.push({ symbol, error: daily.reason.message }); return; }
+      const v = daily.value;
+      const i = intraday.status === 'fulfilled' ? intraday.value : null;
+      const quote = v.quote;
+      const timing = includeTiming && !isIndex ? buildTimingSet({
+        daily: v.candles, intraday: i?.candles || [], quote,
+        dailyStale: v.stale, intradayStale: i?.stale ?? false,
+        dailyFetchedAt: v.fetchedAt, intradayFetchedAt: i?.fetchedAt ?? null
+      }) : null;
+      items.push({
+        ...quote, candles: v.candles, stale: v.stale, fetchedAt: v.fetchedAt,
+        historySource: v.historySource, quoteSource: v.quoteSource,
+        providerWarning: v.providerWarning || i?.providerWarning || null,
+        swing: swingSummary(v.candles, quote.timezone),
+        intradayBarTime: i?.candles?.at(-1)?.time ?? null,
+        intradayFetchedAt: i?.fetchedAt ?? null,
+        intradayStale: i?.stale ?? false,
+        timing,
+        timingWarning: includeTiming && !isIndex && intraday.status === 'rejected' ? 'Intraday timing unavailable; daily timing may still be shown.' : null
+      });
     });
-    res.json({ items, errors, fetchedAt: Date.now() });
+    res.json({ items, errors, timingIncluded: includeTiming, fetchedAt: Date.now() });
   } catch (e) { next(e); }
 });
 

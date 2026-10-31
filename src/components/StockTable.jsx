@@ -3,6 +3,7 @@ import { Star, ChevronRight, ArrowUpDown, AlertCircle, RefreshCw, Database } fro
 import StockLogo from './StockLogo.jsx';
 import Sparkline from './Sparkline.jsx';
 import { VerdictBadge } from './SignalCard.jsx';
+import { TimingBadge } from './TimingSignals.jsx';
 import { formatPrice, formatChange, formatNumber } from '../../shared/catalog.js';
 
 export default function StockTable({ items = [], watchlist = [], onToggleWatch, onSelect, loading = false, error = null, onRetry, sortable = false, compact = false, emptyTitle = 'No stocks here yet', emptyText = 'Add stocks from search to build your watchlist.', unavailable = false }) {
@@ -34,6 +35,7 @@ export default function StockTable({ items = [], watchlist = [], onToggleWatch, 
           <Th k="changePercent" className="num">Day change</Th>
           {!compact && <Th k="rsi" className="num">RSI (14)</Th>}
           <th>Swing signal</th>
+          <th className="timing-col">Buy / sell timing</th>
           <th className="trend-col">5-session trend</th>
           <th className="action-col"><span className="sr-only">Actions</span></th>
         </tr></thead>
@@ -41,6 +43,7 @@ export default function StockTable({ items = [], watchlist = [], onToggleWatch, 
           {sorted.map(s => {
             const saved = watchlist.includes(s.symbol);
             const up = (s.changePercent ?? 0) >= 0;
+            const timing = s.timing?.swing || null;
             return (
               <tr key={s.symbol} onClick={() => onSelect(s.symbol)} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') onSelect(s.symbol); }} aria-label={`Analyze ${s.name}`}>
                 <td><div className="table-company"><StockLogo symbol={s.symbol} size={34} /><div><strong>{s.name}</strong><span>{s.symbol} · {s.exchange}</span></div></div></td>
@@ -48,6 +51,7 @@ export default function StockTable({ items = [], watchlist = [], onToggleWatch, 
                 <td className={`num ${up ? 'pos' : 'neg'}`}>{formatChange(s.changePercent)}</td>
                 {!compact && <td className="num muted">{formatNumber(s.swing?.rsi, 1)}</td>}
                 <td><VerdictBadge verdict={s.swing?.verdict || 'Unavailable'} small /></td>
+                <td className="timing-col">{timing && timing.status !== 'unavailable' ? <div className="table-timing"><TimingBadge plan={timing} small /><span>Buy &gt; {formatPrice(timing.buyTrigger, s.currency)} · Sell &lt; {formatPrice(timing.sellTrigger, s.currency)}</span></div> : <span className="muted">—</span>}</td>
                 <td className="trend-col"><Sparkline values={(s.candles || []).slice(-5).map(c => c.close)} width={96} height={30} color={up ? '#10a779' : '#ef6b73'} /></td>
                 <td className="action-col"><div className="row-actions">
                   <button className={`icon-btn tiny star-btn ${saved ? 'starred' : ''}`} onClick={e => { e.stopPropagation(); onToggleWatch(s.symbol); }} aria-label={saved ? `Remove ${s.symbol} from watchlist` : `Add ${s.symbol} to watchlist`}><Star size={15} fill={saved ? 'currentColor' : 'none'} /></button>

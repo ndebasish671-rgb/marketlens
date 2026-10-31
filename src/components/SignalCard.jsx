@@ -1,5 +1,6 @@
 import React from 'react';
 import { Clock3, CalendarDays, ArrowUpRight, ArrowDownRight, Minus, ChevronRight, Info } from 'lucide-react';
+import { TimingBadge } from './TimingSignals.jsx';
 
 export function VerdictBadge({ verdict, small = false }) {
   const v = (verdict || 'Unavailable').toLowerCase();
@@ -7,7 +8,7 @@ export function VerdictBadge({ verdict, small = false }) {
   return <span className={`verdict verdict-${v} ${small ? 'verdict-small' : ''}`}><Icon size={small ? 12 : 15} strokeWidth={2.5} />{verdict || 'Unavailable'}</span>;
 }
 
-export default function SignalCard({ analysis, active, onSelect, onDetails, unavailable = false }) {
+export default function SignalCard({ analysis, active, onSelect, onDetails, unavailable = false, plan = null }) {
   const intraday = analysis?.mode === 'intraday';
   const Icon = intraday ? Clock3 : CalendarDays;
   const verdict = analysis?.verdict || 'Unavailable';
@@ -26,6 +27,7 @@ export default function SignalCard({ analysis, active, onSelect, onDetails, unav
       </div>
       {analysis?.alignment != null && <div className="alignment-track" aria-hidden="true"><span style={{ width: `${Math.max(analysis.alignment, 4)}%` }} /></div>}
       <p className="signal-counts">{analysis?.score == null ? analysis?.reason || (unavailable ? 'Connect the API to calculate signals.' : 'Waiting for enough history…') : `${analysis.bullish} bullish · ${analysis.bearish} bearish · ${analysis.neutral} neutral`}</p>
+      {plan && <div className="signal-timing"><TimingBadge plan={plan} small /></div>}
       <ul className="signal-reasons">
         {rules.map(r => <li key={r.id}><span className={`rule-dot ${r.vote > 0 ? 'pos' : r.vote < 0 ? 'neg' : 'neu'}`} />{r.detail}</li>)}
       </ul>

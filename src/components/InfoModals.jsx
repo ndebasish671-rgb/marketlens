@@ -24,6 +24,9 @@ export function MethodologyModal({ onClose }) {
       </tbody></table></div>
       <h3>From votes to a badge</h3>
       <p>Score = 50 + 50 × (net votes ÷ number of rules). <strong>Buy</strong> at score ≥ 67, <strong>Sell</strong> at score ≤ 33, otherwise <strong>Hold</strong>. “Aligned” is the absolute distance from 50, doubled — it measures indicator agreement, <em>not</em> probability of profit.</p>
+      <h3>Buy / sell timing (when)</h3>
+      <p>The timing monitor adds a separate, conditional entry/exit rule on top of the bias score. It uses <strong>completed bars only</strong>: 5-minute bars for intraday and daily bars for swing. A buy setup requires a completed close above the prior 20-bar high, above SMA 20, with positive MACD, and above session VWAP for intraday. A sell/exit setup requires a completed close below the prior 20-bar low, below SMA 20, with negative MACD, and below session VWAP for intraday. If confirmation is missing, the state is Wait.</p>
+      <p>Trigger levels are prior 20-bar highs/lows, not predicted future prices. The optional risk example is educational only: invalidation 1.5×ATR below the completed close and a 2R reference 3×ATR above. It is not a recommended stop-loss or target. “Sell” means bearish/exit watch, not a short-sale instruction.</p>
       <h3>Important limitations</h3>
       <ul className="info-list">
         <li>RSI is used here as a mean-reversion heuristic; oversold can stay oversold and overbought can stay overbought.</li>

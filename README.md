@@ -11,12 +11,25 @@ A free, full-stack stock-analysis dashboard for **Indian (NSE/BSE) and US (NYSE/
 - **Market pulse:** NIFTY 50, SENSEX, S&P 500 and Nasdaq Composite with recent trend sparklines.
 - **Interactive charts:** candlestick / line, volume, SMA 20, SMA 50, EMA 20, Bollinger Bands, session VWAP, RSI (14) and MACD (12,26,9). Drag to pan, scroll/pinch to zoom.
 - **Two signal timeframes:** intraday (5-minute bars) and swing (daily bars), side by side with transparent Buy / Sell / Hold reasoning.
+- **Live buy/sell timing:** a dedicated monitor shows conditional “buy when” and “sell/exit when” trigger levels for every monitored stock, using completed bars, trend/MACD/VWAP confirmation, quote timestamps, market-open/closed state and stale-data labels. It auto-checks about every 60 seconds while the tab is visible.
 - **Stock search:** Yahoo Finance search plus a built-in NSE/US catalogue.
 - **Watchlist:** up to 12 stocks, saved in this browser.
 - **Screener:** featured Indian and US equities with market/signal filters and sorting.
 - **News:** stock-specific and market headlines from Google News RSS, linking to publishers.
 - **Auto-refresh:** about every 60 seconds while the tab is visible, with pause/resume and manual refresh.
 - **Honest status:** quote timestamps, session status, delayed-data wording, stale-cache warnings and a clear API-not-configured state.
+
+## Live buy/sell timing
+
+The **Buy / Sell signals** page monitors the 16 featured stocks plus the 8 most recently opened custom symbols. Every stock you open also gets a timing panel on the overview chart. The monitor is not an order system and does not claim exchange-real-time data.
+
+Timing rules use **completed bars only**:
+
+- **Buy setup:** completed close above the prior 20-bar high, above SMA 20, positive MACD, and above session VWAP for intraday.
+- **Sell/exit setup:** completed close below the prior 20-bar low, below SMA 20, negative MACD, and below session VWAP for intraday.
+- **Wait:** any required confirmation is missing, data is insufficient, or the response is stale/cached.
+
+The API exposes this through `/api/market?timing=1`, which returns `timing.intraday` and `timing.swing` plans for stocks. The frontend also computes the selected stock’s plan from `/api/analysis` candles. Trigger levels are observed prior 20-bar highs/lows, not forecasts. The optional ATR risk example is educational only.
 
 ## Architecture
 
@@ -213,7 +226,7 @@ node test/browser.mjs
 # First time only: npx playwright install --with-deps chromium
 ```
 
-Unit tests cover indicators/signals, API-base normalization, Pages base paths, exact-origin CORS, real HTTP preflight/rejection, and the Finnhub adapter/public-deployment guard. The browser smoke test exercises the all-in-one app against `http://127.0.0.1:3000`.
+Unit tests cover indicators/signals, completed-bar buy/sell timing, API-base normalization, Pages base paths, exact-origin CORS, real HTTP preflight/rejection, and the Finnhub adapter/public-deployment guard. The browser smoke test exercises the all-in-one app, including the Buy / Sell signals page, against `http://127.0.0.1:3000` (override with `BASE_URL`).
 
 For a split-hosting browser check, build under a project path, serve that build statically, run the API on another port with the static server’s origin in `CORS_ORIGINS`, then run:
 
@@ -249,6 +262,7 @@ shared/api-config.js                Public API/base-path normalization
 shared/http-config.js               Exact-origin CORS helpers
 shared/catalog.js                   Symbol catalogue & formatters
 shared/indicators.js                Pure indicator + signal calculations
+shared/trade-plan.js                Completed-bar buy/sell timing rules
 shared/finnhub.js                   Optional server-side quote adapter + public guard
 src/lib/api.js                      Central frontend API client
 src/                                React UI (Vite)
