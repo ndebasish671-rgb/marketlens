@@ -22,7 +22,8 @@ const overview = {
   chartCanvases: await page.locator('.price-chart canvas').count(),
   newsItems: await page.locator('.news-preview .news-item').count(),
   timingPanel: await page.locator('.timing-panel').count(),
-  timingBadges: await page.locator('.signal-timing .timing-badge').count()
+  timingBadges: await page.locator('.signal-timing .timing-badge').count(),
+  poweredBy: await page.locator('.page-footer .powered-by').textContent()
 };
 
 // Swing view + MACD

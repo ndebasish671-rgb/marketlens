@@ -49,6 +49,7 @@ h1, h2, h3, h4, p { margin-top: 0; }
 .sidebar-links button:hover { color: #fff; background: #1b2c35; }
 .sidebar-foot { font-size: 10.5px; color: #5f7380; padding: 16px 12px 0; line-height: 1.6; }
 .sidebar-foot span { color: #465a66; }
+.sidebar-foot .powered-by { color: #9fb0bb; font-weight: 600; }
 
 /* Topbar */
 .main-shell { margin-left: var(--sidebar-w); width: calc(100% - var(--sidebar-w)); min-width: 0; }
@@ -252,6 +253,7 @@ kbd { font-size: 10px; background: #fff; border: 1px solid #e2e8ee; border-radiu
 .page-footer div { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .page-footer button { background: none; border: 0; color: #64748b; font-size: 10.5px; cursor: pointer; padding: 0; }
 .page-footer button:hover { color: var(--green); }
+.page-footer .powered-by { color: #64748b; font-weight: 600; }
 .banner { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 9px; font-size: 11.5px; margin-bottom: 16px; line-height: 1.4; }
 .banner-warn { background: #fff8eb; border: 1px solid #fde8bd; color: #92600e; }
 .inline-warning { font-size: 11px; color: #b7791f; margin: 8px 0; }

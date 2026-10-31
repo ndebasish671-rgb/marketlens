@@ -1,5 +1,7 @@
 # MarketLens
 
+Powered by Debasish.
+
 A free, full-stack stock-analysis dashboard for **Indian (NSE/BSE) and US (NYSE/Nasdaq)** markets.
 
 **Recommended deployment: GitHub Pages for the frontend + a separate Node API backend.** GitHub Pages serves the React interface; the Node service fetches data, calculates signals, caches responses and keeps optional provider credentials off the browser.

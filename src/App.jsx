@@ -309,7 +309,7 @@ export default function App() {
           <button onClick={() => setModal({ type: 'sources' })}><Database size={16} />Data & sources</button>
           <button onClick={() => setModal({ type: 'connection' })}><KeyRound size={16} />API connection{providerStatus?.enabled && <span className="tiny-dot open" />}</button>
         </div>
-        <div className="sidebar-foot">Independent by design.<br /><span>Research, not recommendations.</span></div>
+        <div className="sidebar-foot">Independent by design.<br /><span className="powered-by">Powered by Debasish</span><br /><span>Research, not recommendations.</span></div>
       </aside>
 
       <div className="main-shell">
@@ -486,7 +486,7 @@ export default function App() {
 
           <footer className="page-footer">
             <div><ShieldCheck size={15} /><span>Built for perspective, not promises. Educational analysis only — not investment advice. Data may be delayed.</span></div>
-            <div><button onClick={() => setModal({ type: 'method' })}>Methodology</button><span>·</span><button onClick={() => setModal({ type: 'sources' })}>Data & sources</button></div>
+            <div><button onClick={() => setModal({ type: 'method' })}>Methodology</button><span>·</span><button onClick={() => setModal({ type: 'sources' })}>Data & sources</button><span>·</span><span className="powered-by">Powered by Debasish</span></div>
           </footer>
         </main>
       </div>
