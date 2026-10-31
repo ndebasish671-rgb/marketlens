@@ -57,6 +57,28 @@ await page.waitForTimeout(300);
 const screenerRows = await page.locator('.stock-table tbody tr').count();
 await page.screenshot({ path: 'screenshots/screener.png', fullPage: true });
 
+// Indicator studio
+await page.getByRole('button', { name: 'Indicator studio', exact: true }).click();
+await page.waitForSelector('.indicator-studio .price-chart canvas', { timeout: 30000 });
+await page.waitForTimeout(600);
+const studioTabs = await page.locator('.studio-tabs button').count();
+await page.getByRole('tab', { name: 'Trend', exact: true }).click();
+await page.getByRole('option', { name: 'ADX / DMI (14)', exact: true }).click();
+await page.waitForSelector('.study-chart canvas', { timeout: 10000 });
+const adxReading = await page.locator('.study-reading').textContent();
+await page.locator('.studio-overlays').getByRole('button', { name: 'SuperTrend', exact: true }).click();
+await page.getByRole('tab', { name: 'Volume', exact: true }).click();
+await page.getByRole('option', { name: 'On-Balance Volume', exact: true }).click();
+await page.waitForTimeout(400);
+const studyChartCanvases = await page.locator('.study-chart canvas').count();
+await page.getByRole('tab', { name: 'Levels', exact: true }).click();
+await page.waitForSelector('.level-table-card', { timeout: 10000 });
+const levelTables = await page.locator('.level-table-card').count();
+await page.getByRole('button', { name: 'Plot Fibonacci', exact: true }).click();
+await page.waitForTimeout(400);
+await page.screenshot({ path: 'screenshots/indicator-studio.png', fullPage: true });
+const studio = { tabs: studioTabs, adxReading, studyChartCanvases, levelTables };
+
 // Live buy/sell timing page
 await page.getByRole('button', { name: 'Buy / Sell signals' }).click();
 await page.waitForSelector('.timing-card', { timeout: 60000 });
@@ -92,7 +114,13 @@ await page.getByRole('button', { name: 'Overview' }).click();
 await page.waitForTimeout(1200);
 await page.screenshot({ path: 'screenshots/mobile-overview.png', fullPage: true });
 const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+await page.getByRole('button', { name: 'Toggle navigation' }).click();
+await page.getByRole('button', { name: 'Indicator studio', exact: true }).click();
+await page.waitForSelector('.indicator-studio .price-chart canvas', { timeout: 30000 });
+await page.waitForTimeout(600);
+const mobileStudioOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+await page.screenshot({ path: 'screenshots/mobile-indicator-studio.png', fullPage: true });
 
-console.log(JSON.stringify({ overview, modalTitle, timingCards, timingWithLevels, timingModalTitle, swingTimingCards, connectionTitle, secretInputs, searchCount, selected, screenerRows, newsCards, mobileOverflow, consoleErrors: errors }, null, 2));
+console.log(JSON.stringify({ overview, studio, modalTitle, timingCards, timingWithLevels, timingModalTitle, swingTimingCards, connectionTitle, secretInputs, searchCount, selected, screenerRows, newsCards, mobileOverflow, mobileStudioOverflow, consoleErrors: errors }, null, 2));
 await browser.close();
 if (errors.length) process.exitCode = 1;

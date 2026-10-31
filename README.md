@@ -9,7 +9,8 @@ A free, full-stack stock-analysis dashboard for **Indian (NSE/BSE) and US (NYSE/
 ## What it does
 
 - **Market pulse:** NIFTY 50, SENSEX, S&P 500 and Nasdaq Composite with recent trend sparklines.
-- **Interactive charts:** candlestick / line, volume, SMA 20, SMA 50, EMA 20, Bollinger Bands, session VWAP, RSI (14) and MACD (12,26,9). Drag to pan, scroll/pinch to zoom.
+- **Interactive charts:** candlestick / line, volume, moving averages, Bollinger Bands, session VWAP, RSI (14) and MACD (12,26,9). Drag to pan, scroll/pinch to zoom.
+- **Indicator studio:** essential trend, momentum, volume, volatility and support/resistance studies with selectable graphs, latest readings, plain-language context and price overlays. Informational only — it does not change the Buy/Sell scoring rules.
 - **Two signal timeframes:** intraday (5-minute bars) and swing (daily bars), side by side with transparent Buy / Sell / Hold reasoning.
 - **Live buy/sell timing:** a dedicated monitor shows conditional “buy when” and “sell/exit when” trigger levels for every monitored stock, using completed bars, trend/MACD/VWAP confirmation, quote timestamps, market-open/closed state and stale-data labels. It auto-checks about every 60 seconds while the tab is visible.
 - **Stock search:** Yahoo Finance search plus a built-in NSE/US catalogue.
@@ -30,6 +31,18 @@ Timing rules use **completed bars only**:
 - **Wait:** any required confirmation is missing, data is insufficient, or the response is stale/cached.
 
 The API exposes this through `/api/market?timing=1`, which returns `timing.intraday` and `timing.swing` plans for stocks. The frontend also computes the selected stock’s plan from `/api/analysis` candles. Trigger levels are observed prior 20-bar highs/lows, not forecasts. The optional ATR risk example is educational only.
+
+## Indicator studio
+
+The **Indicator studio** page is a practical essential-analysis suite, not a claim to include every indicator ever published. It is calculated from the same fetched candles and is **informational only**: it does not add votes to the Buy/Sell/Hold score and does not alter the completed-bar timing triggers.
+
+- **Trend overlays:** SMA 20/50/200, EMA 9/20/50/200, WMA 20, session VWAP, SuperTrend, Parabolic SAR, ADX/DMI.
+- **Momentum studies:** RSI, MACD, Stochastic, StochRSI, Williams %R, CCI, ROC, Momentum, Awesome Oscillator.
+- **Volume studies:** MFI, OBV, Accumulation/Distribution, Chaikin Money Flow, relative volume.
+- **Volatility studies:** ATR, ATR%, Bollinger Band width, Bollinger %B, 20-bar return volatility, Keltner Channels, Donchian Channels.
+- **Levels:** classic pivots, Donchian 20-bar range and Fibonacci retracements for the visible swing, with optional plot overlays.
+
+Each study shows its latest value and a plain-language reading. Studies may display “—” until enough bars exist for warm-up; try a longer range or swing mode when history is short. Indicator readings can conflict and are not recommendations.
 
 ## Architecture
 
@@ -226,7 +239,7 @@ node test/browser.mjs
 # First time only: npx playwright install --with-deps chromium
 ```
 
-Unit tests cover indicators/signals, completed-bar buy/sell timing, API-base normalization, Pages base paths, exact-origin CORS, real HTTP preflight/rejection, and the Finnhub adapter/public-deployment guard. The browser smoke test exercises the all-in-one app, including the Buy / Sell signals page, against `http://127.0.0.1:3000` (override with `BASE_URL`).
+Unit tests cover indicators/signals, essential study calculations, completed-bar buy/sell timing, API-base normalization, Pages base paths, exact-origin CORS, real HTTP preflight/rejection, and the Finnhub adapter/public-deployment guard. The browser smoke test exercises the all-in-one app, including the Indicator studio and Buy / Sell signals pages, against `http://127.0.0.1:3000` (override with `BASE_URL`).
 
 For a split-hosting browser check, build under a project path, serve that build statically, run the API on another port with the static server’s origin in `CORS_ORIGINS`, then run:
 
@@ -262,6 +275,7 @@ shared/api-config.js                Public API/base-path normalization
 shared/http-config.js               Exact-origin CORS helpers
 shared/catalog.js                   Symbol catalogue & formatters
 shared/indicators.js                Pure indicator + signal calculations
+shared/studies.js                   Essential technical studies + study catalog
 shared/trade-plan.js                Completed-bar buy/sell timing rules
 shared/finnhub.js                   Optional server-side quote adapter + public guard
 src/lib/api.js                      Central frontend API client

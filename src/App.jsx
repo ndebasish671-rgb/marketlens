@@ -3,11 +3,13 @@ import {
   LayoutDashboard, BarChart3, Star, Newspaper, Search, RefreshCw, Pause, Play,
   Globe, ChevronRight, Plus, Clock3, CalendarDays, Info, ShieldCheck, Database,
   Menu, X, SlidersHorizontal, TrendingUp, Activity, AlertCircle, Loader2,
-  CandlestickChart, LineChart, ArrowUpRight, BookOpen, KeyRound
+  CandlestickChart, LineChart, ArrowUpRight, BookOpen, KeyRound, FlaskConical
 } from 'lucide-react';
 import { STOCKS, INDICES, DEFAULT_WATCHLIST, MARKET_SYMBOLS, catalogEntry, formatPrice, formatChange, formatNumber, formatCompact } from '../shared/catalog.js';
 import { analyze } from '../shared/indicators.js';
+import { computeStudySeries } from '../shared/studies.js';
 import { buildTradePlan } from '../shared/trade-plan.js';
+import IndicatorStudio from './components/IndicatorStudio.jsx';
 import { TimingCard, TimingPanel, TimingDetailModal } from './components/TimingSignals.jsx';
 import PriceChart, { OscillatorChart, INDICATOR_COLORS } from './components/PriceChart.jsx';
 import Sparkline from './components/Sparkline.jsx';
@@ -22,6 +24,7 @@ import { apiConfig, apiRequest, getJSON } from './lib/api.js';
 
 const PAGES = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'studies', label: 'Indicator studio', icon: FlaskConical },
   { id: 'signals', label: 'Buy / Sell signals', icon: Activity },
   { id: 'screener', label: 'Market screener', icon: BarChart3 },
   { id: 'watchlist', label: 'My watchlist', icon: Star },
@@ -74,7 +77,7 @@ export default function App() {
   const [mode, setMode] = useState('intraday');
   const [range, setRange] = useState('1D');
   const [chartType, setChartType] = useState('candles');
-  const [show, setShow] = useState({ sma20: true, sma50: true, ema20: false, bb: false, vwap: false, levels: true });
+  const [show, setShow] = useState({ sma20: true, sma50: true, sma200: false, ema9: false, ema20: false, ema50: false, ema200: false, wma20: false, bb: false, keltner: false, donchian: false, supertrend: false, psar: false, pivot: false, vwap: false, levels: true, fib: false });
   const [osc, setOsc] = useState('rsi');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -226,6 +229,7 @@ export default function App() {
     const series = (activeSignal?.series || []).filter(s => times.has(s.time));
     return { candles, series };
   }, [a, mode, range, tz, activeSignal]);
+  const studySeries = useMemo(() => computeStudySeries(chartData.candles, tz), [chartData.candles, tz]);
 
   const indices = INDICES.map(ix => marketState.items.find(i => i.symbol === ix.symbol));
   const featured = marketState.items.filter(i => STOCKS.some(s => s.symbol === i.symbol));
@@ -275,8 +279,8 @@ export default function App() {
   }), [signalItems, signalMarket, signalMode, signalStatus, signalQuery]);
   const signalCounts = useMemo(() => signalItems.reduce((acc, i) => { const s = i.timing?.[signalMode]?.status || 'unavailable'; acc[s] = (acc[s] || 0) + 1; return acc; }, { buy: 0, sell: 0, wait: 0, unavailable: 0 }), [signalItems, signalMode]);
 
-  const pageTitle = { overview: 'Market overview', signals: 'Buy / Sell signals', screener: 'Market screener', watchlist: 'My watchlist', news: 'Market news' }[page];
-  const pageSub = { overview: 'Less noise. More perspective on the stocks you follow.', signals: 'Conditional buy and sell/exit timing for every monitored stock, from completed bars.', screener: 'A starting point for your next deep dive — Indian and US equities.', watchlist: 'Your personal shortlist, with prices and swing context in one place.', news: 'Headlines that move markets, sourced from Google News.' }[page];
+  const pageTitle = { overview: 'Market overview', studies: 'Indicator studio', signals: 'Buy / Sell signals', screener: 'Market screener', watchlist: 'My watchlist', news: 'Market news' }[page];
+  const pageSub = { overview: 'Less noise. More perspective on the stocks you follow.', studies: 'Essential technical studies with selectable graphs, latest readings and plain-language context.', signals: 'Conditional buy and sell/exit timing for every monitored stock, from completed bars.', screener: 'A starting point for your next deep dive — Indian and US equities.', watchlist: 'Your personal shortlist, with prices and swing context in one place.', news: 'Headlines that move markets, sourced from Google News.' }[page];
   const indiaQuote = marketState.items.find(i => i.symbol === '^NSEI');
   const usQuote = marketState.items.find(i => i.symbol === '^GSPC');
   const indiaOpen = sessionOpen(indiaQuote);
@@ -381,7 +385,7 @@ export default function App() {
                     : <PriceChart candles={chartData.candles} series={chartData.series} type={chartType} show={chartShow} levels={show.levels ? activePlan : null} timezone={tz} currency={currency} height={292} resetKey={resetKey} />}
                 </div>
 
-                <div className="indicator-bar"><button className={`indicator-chip ${show.levels ? 'on' : ''}`} onClick={() => setShow(s => ({ ...s, levels: !s.levels }))} aria-pressed={show.levels}><Activity size={12} />Buy/Sell levels</button></div>
+                <div className="indicator-bar"><button className={`indicator-chip ${show.levels ? 'on' : ''}`} onClick={() => setShow(s => ({ ...s, levels: !s.levels }))} aria-pressed={show.levels}><Activity size={12} />Buy/Sell levels</button><button className="indicator-chip" onClick={() => setPage('studies')}><FlaskConical size={12} />Open indicator studio</button></div>
                 <div className="oscillator-head">
                   <div className="mini-tabs"><button className={osc === 'rsi' ? 'active' : ''} onClick={() => setOsc('rsi')}>RSI (14)</button><button className={osc === 'macd' ? 'active' : ''} onClick={() => setOsc('macd')}>MACD (12,26,9)</button></div>
                   <span className="osc-value">{osc === 'rsi' ? `RSI ${formatNumber(ind.rsi, 1)}` : `MACD ${formatNumber(ind.macd, 3)} · Signal ${formatNumber(ind.macdSignal, 3)}`}</span>
@@ -442,6 +446,15 @@ export default function App() {
           </section>}
 
 
+          {page === 'studies' && <IndicatorStudio
+            symbol={symbol} stockName={stockName} quote={quote} entry={entry} currency={currency} timezone={tz}
+            mode={mode} range={range} ranges={RANGES[mode]} switchMode={switchMode} setRange={setRange}
+            chartType={chartType} setChartType={setChartType} candles={chartData.candles} series={chartData.series}
+            studySeries={studySeries} show={chartShow} setShow={setShow} activePlan={activePlan}
+            loading={analysisState.loading} error={analysisState.error} configured={apiConfig.configured}
+            onRetry={refresh} onSetup={() => setModal({ type: 'connection' })} resetKey={resetKey}
+            saved={saved} onToggleWatch={() => toggleWatch(symbol)} open={open} asOf={asOf(quote?.marketTime, tz)}
+          />}
           {page === 'signals' && <section className="signals-page">
             <div className="card timing-monitor-head">
               <div><h2>Live buy / sell monitor</h2><p>Auto-checks about every 60s while this tab is visible. Signals use completed bars and latest available data, which may be delayed. Every stock you open is analyzed; the monitor keeps the 16 featured stocks plus your 8 most recently opened custom symbols.</p></div>
