@@ -1,0 +1,14 @@
+node_modules/
+dist/
+screenshots/
+.cache/
+.wrangler/
+.pages-test/
+*.log
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+!.env.example
+!.dev.vars.example
+frontend.env.local

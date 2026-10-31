@@ -1,0 +1,23 @@
+# Optional Render blueprint for the API only; GitHub Pages hosts the frontend.
+# Render will prompt for CORS_ORIGINS. Do not add a personal Finnhub key here.
+services:
+  - type: web
+    name: marketlens-api
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    buildCommand: npm ci --omit=dev
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.14.0
+      - key: NODE_ENV
+        value: production
+      - key: PUBLIC_DEPLOYMENT
+        value: "true"
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: CORS_ORIGINS
+        sync: false

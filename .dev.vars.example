@@ -1,0 +1,4 @@
+# Optional: personal, non-commercial Finnhub US quotes.
+# Copy to .dev.vars for local Wrangler development. Do not commit real values.
+FINNHUB_API_KEY=
+FINNHUB_PERSONAL_USE_CONFIRMED=false

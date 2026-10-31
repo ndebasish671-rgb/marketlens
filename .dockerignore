@@ -1,0 +1,8 @@
+# Allowlist only the files needed by the API-only image.
+# This keeps local secrets, frontend builds and repository metadata out of the context.
+*
+!package.json
+!package-lock.json
+!server.js
+!shared/
+!shared/**
